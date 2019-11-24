@@ -1,2 +1,2 @@
 # CaseStudy2DDS
-Second Case Study for DDS 6306
+Second Case Study for DS 6306
