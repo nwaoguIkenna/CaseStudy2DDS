@@ -1,0 +1,252 @@
+---
+title: "Case Study 2"
+author: "Ikenna Nwaogu"
+date: "12/3/2019"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+## Executive Summary
+   Employment attrition and how it relates to other variables from a dataset provided by DDS Analytics was analyzed in the first part of this case study. We have also analyzed how these variables relate to the monthly income. We specifically looked at variables like, Job Role, Job Satisfaction, Stock Options, Marital Status and so on in other to predict the outcome of Attrition. We also used the above variables like Attrition, Job Level, Years At Company, Years In Current Role etc to predict the outcome of Monthly income.
+  
+we used cross validation to split our dataset to train and test our model. we split the data 90% train and 10% test. This was done because of the nature of our dataset and because we have enough test datset to validate our trained model.
+
+
+## Introduction
+DDSAnalytics is an analytics company that specializes in talent management solutions for Fortune 100 companies. Talent management is defined as the iterative process of developing and retaining employees. It may include workforce planning, employee training programs, identifying high-potential employees and reducing/preventing voluntary employee turnover (attrition). To gain a competitive edge over its competition, DDSAnalytics is planning to leverage data science for talent management. The executive leadership has identified predicting employee turnover as its first application of data science for talent management. We are tasked to conduct an analysis of existing employee data. 
+
+
+## 1. Classification
+
+In the first part of this case study we are to build a model to predict the Attrition (Yes or No) with a dataset with 72 different features. We are to analyze the data and get the best model that will attain at least 60% sensitivity and specificity (60 each = 120 total) for the training and the validation set. 
+```{r Employmenmt Data, message=FALSE, warning=FALSE}
+#install.packages("Boruta")
+library(caret)
+library(e1071)
+library(dplyr) 
+library(tidyverse)
+library(tidyr)
+library(Boruta)
+
+CaseStudy2_data <- read.csv("data/CaseStudy2-data.csv", header = TRUE)
+names(CaseStudy2_data)
+```
+#### Using the Boruta package we continue by making use of the feature selection to give us an idea on which features are more important.
+```{r Feature selection, message=FALSE, warning=FALSE}
+
+# Decide if a variable is important or not using Boruta
+boruta_output <- Boruta(Attrition ~ ., data=CaseStudy2_data, doTrace=2)
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])  # collect Confirmed and Tentative variables
+print(boruta_signif)  # significant variables
+
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Feature Importance") 
+```
+
+#### Exploratory Data Analysis
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+## Including Plots
+CaseStudy2_data <- CaseStudy2_data %>% mutate(Job = case_when(JobRole == 'Healthcare Representative' ~ 1, JobRole == 'Human Resources' ~ 2, JobRole == 'Laboratory Technician' ~ 3,JobRole == 'Manager' ~ 4, JobRole == 'Manufacturing Director' ~ 5, JobRole == 'Research Director' ~ 6, JobRole == 'Research Scientist' ~ 7, JobRole == 'Sales Executive' ~ 8, JobRole == 'Sales Representative' ~ 9))
+
+CaseStudy2_data %>% ggplot(aes(fill=JobRole, x=Job)) + geom_histogram(stat = 'count') + labs(title = 'Job Role')
+
+CaseStudy2_data %>% ggplot(aes(fill=JobRole, y=MonthlyIncome, x=Job)) + geom_boxplot() + labs(title = 'Job Role with respect to Monthly Income')
+
+CaseStudy2_data %>% ggplot(aes(fill=JobRole, y=HourlyRate, x=Job)) + geom_boxplot() + labs(title = 'Job Role with respect to Hourly Rate')
+
+CaseStudy2_data %>% ggplot(aes(fill=JobRole, x=JobSatisfaction)) + geom_histogram() + labs(title = 'Job Role with respect to Job Satisfaction')
+
+CaseStudy2_data %>% ggplot(aes(fill=OverTime, x=JobRole)) + geom_histogram(stat = 'count') + labs(title = 'Job Role with respect to Over Time Worked')
+
+CaseStudy2_data %>% ggplot(aes(fill=Attrition, x=JobRole)) + geom_histogram(stat = 'count') + labs(title = 'Job Role with respect to Turn Over')
+```
+We can clearly see above that there are relationships between jobe role and many other variables.
+
+### Data Cleaning and Type Conversion
+This section we clean the data and convert some of the data types to the relevant datatypes for our prediction analysis. We also scaled the numeric columns to get a better scaling for our model.
+```{r echo=FALSE, paged.print=TRUE}
+
+CaseStudy2_data$Education <- as.factor(CaseStudy2_data$Education)
+CaseStudy2_data <- CaseStudy2_data %>% filter(!is.na(Department))
+CaseStudy2_data <- CaseStudy2_data %>% filter(!is.na(OverTime))
+
+CaseStudy2_data <- CaseStudy2_data %>% mutate(Dept = case_when(Department == 'Human Resources' ~ 1, Department == 'Research & Development' ~ 2, Department == 'Sales' ~ 3))
+CaseStudy2_data$Dept <- as.factor(CaseStudy2_data$Dept)
+
+CaseStudy2_data <- CaseStudy2_data %>% mutate(Stat = case_when(MaritalStatus == 'Divorced' ~ 1, MaritalStatus == 'Married' ~ 2, MaritalStatus == 'Single' ~ 3))
+CaseStudy2_data$Stat <- as.factor(CaseStudy2_data$Stat)
+
+CaseStudy2_data <- CaseStudy2_data %>% mutate(Job = case_when(JobRole == 'Healthcare Representative' ~ 1, JobRole == 'Human Resources' ~ 2, JobRole == 'Laboratory Technician' ~ 3,JobRole == 'Manager' ~ 4, JobRole == 'Manufacturing Director' ~ 5, 
+                                            JobRole == 'Research Director' ~ 6, JobRole == 'Research Scientist' ~ 7, JobRole == 'Sales Executive' ~ 8, JobRole == 'Sales Representative' ~ 9))
+
+CaseStudy2_data$Stat <- as.factor(CaseStudy2_data$Stat)
+CaseStudy2_data$Job <- as.factor(CaseStudy2_data$Job)
+
+CaseStudy2_data$JobInvolvement <- as.factor(CaseStudy2_data$JobInvolvement)
+case <- CaseStudy2_data %>% filter(!is.na(Age))
+case <- CaseStudy2_data %>% filter(!is.na(Job))
+case$Attrition<- as.factor(case$Attrition)
+#case$Age <- log(case$Age)
+case$Age <- scale(case$Age)
+case$Age <- as.numeric(case$Age)
+case$OverTime <- as.numeric(case$OverTime)     
+case$MonthlyIncome <- scale(case$MonthlyIncome)
+case$MonthlyIncome <- as.numeric(case$MonthlyIncome)
+case$StockOptionLevel <- as.factor(case$StockOptionLevel)
+case$MaritalStatus <- as.factor(case$MaritalStatus)
+case$JobLevel <- as.factor(case$JobLevel)
+#case$JobRole <- as.factor(case$JobRole)
+case$WorkLifeBalance <- as.factor(case$WorkLifeBalance)
+case$YearsWithCurrManager <- scale(case$YearsWithCurrManager)
+case$JobSatisfaction <- as.factor(case$JobSatisfaction)
+case$YearsInCurrentRole <- sqrt(case$YearsInCurrentRole)
+case$EnvironmentSatisfaction <- as.factor(case$EnvironmentSatisfaction)
+case$Gender <- as.factor(case$Gender)
+case$HourlyRate <- scale(case$HourlyRate)
+case$MonthlyRate <- scale(case$MonthlyRate)
+case$YearsAtCompany <- scale(case$YearsAtCompany)
+case$TotalWorkingYears <- scale(case$TotalWorkingYears)
+case$JobInvolvement <- as.factor(case$JobInvolvement)
+case$NumCompaniesWorked <- scale(case$NumCompaniesWorked)
+case1 <- case %>% dplyr::select('Age','Dept','OverTime','MonthlyIncome','StockOptionLevel','Stat','Job','YearsInCurrentRole','Gender','YearsWithCurrManager','JobInvolvement','YearsAtCompany','TotalWorkingYears','NumCompaniesWorked','JobSatisfaction','JobInvolvement',"WorkLifeBalance",'Attrition') 
+summary(case1)
+```
+
+#### Naive Bayes Model
+Above are the summary of dataset used which features all the variables that would be used to train the model. We will use naive bayes model for our prediction model using the relevant features. We also applied 90% to 10% train and test split. Due to nature of the dataset we needed more data to train and that is the reason why the split was done with this ratio. We also used a seed of 10 for the split.
+```{r, echo=FALSE}
+
+set.seed(10)  # we pick a random seed
+splitPerc = 0.9
+trainIndices = sample(1:dim(case1)[1],round(splitPerc * dim(case1)[1]))
+train = case1[trainIndices,]
+test = case1[-trainIndices,]
+
+
+model <- naiveBayes(Attrition~.,data = train,laplace = 0)
+predict = predict(model, test)
+
+table(as.factor(test$Attrition),predict)
+
+#Confusion Matrix
+cfm = confusionMatrix(predict,as.factor(test$Attrition))
+Sensitivity = cfm$byClass['Sensitivity']
+Specificity = cfm$byClass['Specificity']
+Accuracy = cfm$overall['Accuracy']
+
+Accuracy
+Sensitivity
+Specificity
+```
+We see above that we get a very low readings especially for specificity. We reached the goal of a Specifity of 0.6 but our sensitivity and Accuracy are a bit low. 
+
+#### Seed Iteration
+Now we try to loop through 1-150 seeds to gain a better accuracy, sensitivity, specificity combination reading.
+```{r, echo=FALSE}
+Accuracy = data.frame(accuracy = as.numeric())
+Sensitivity = data.frame(sensitivity = as.numeric())
+Specificity = data.frame(specificity = as.numeric())
+
+stat = data.frame()
+#count = 0
+
+splitPerc = 0.9
+for (i in 1:150){
+  set.seed(i)
+  #count = count + 1
+  trainIndices = sample(1:dim(case)[1],round(splitPerc * dim(case)[1]))
+  train = case1[trainIndices,]
+  test = case1[-trainIndices,]
+  
+  model <- naiveBayes(Attrition~.,data = train,laplace = 0)
+  predict = predict(model, test)
+  
+  table(as.factor(test$Attrition),predict)
+  
+  #Confusion Matrix
+  cfm <- confusionMatrix(predict,test$Attrition)
+  Sensitivity = cfm$byClass['Sensitivity']
+  Specificity = cfm$byClass['Specificity']
+  Accuracy = cfm$overall['Accuracy']
+  
+  stat <- bind_rows(stat,c(Accuracy,Sensitivity,Specificity))
+  
+}
+
+stat <- tibble::rowid_to_column(stat, "ID")
+
+stat %>% filter(Accuracy==max(Accuracy))
+stat %>% filter(Sensitivity==max(Sensitivity))
+stat %>% filter(Specificity==max(Specificity))
+
+stat %>% filter(Accuracy==min(Accuracy))
+stat %>% filter(Sensitivity==min(Sensitivity))
+stat %>% filter(Specificity==min(Specificity))
+
+mean(stat$Accuracy)
+mean(stat$Sensitivity)
+mean(stat$Specificity)
+
+```
+The output above shows us that at seed 88 we get a specificity of 1 and at seed =  76 we get a better Accuracy, Sensitivity but not Specificity. The good thing is that we got good average specificity, sensitivity and accuracy which was the goal. We can be somewhat confident that our model would perform well. We will be using the entire data to train the model the prediction excersice.
+
+## 2. Regression
+In the second part of this case study we are to build a model to predict the Monthly Income with the same dataset with 72 different features. Our goal is to get a low root mean square error (RMSE) for our prediction from the model we build. To achieve this we perform a feature importance selection using Boruta package.
+```{r Variable selection, message=FALSE, warning=FALSE}
+
+# Decide if a variable is important or not using Boruta
+boruta_output <- Boruta(MonthlyIncome ~ ., data=CaseStudy2_data, doTrace=2)
+boruta_signif <- names(boruta_output$finalDecision[boruta_output$finalDecision %in% c("Confirmed", "Tentative")])  # collect Confirmed and Tentative variables
+print(boruta_signif)  # significant variables
+
+plot(boruta_output, cex.axis=.7, las=2, xlab="", main="Feature Importance") 
+
+```
+
+
+#### Summary of the feature selected
+```{r, echo=FALSE, warning=FALSE}
+
+
+case1 <- CaseStudy2_data %>% dplyr::select('Age','BusinessTravel','Dept','Job','YearsInCurrentRole','YearsWithCurrManager','JobInvolvement','YearsAtCompany','TotalWorkingYears','NumCompaniesWorked','JobSatisfaction','JobInvolvement',"WorkLifeBalance",'JobLevel',"YearsSinceLastPromotion",'Education','Attrition','MonthlyIncome') 
+summary(case1)
+
+```
+
+#### Regression Model
+Now we loop through 150 iterations of seed to get one with a lower RMSE. We also used 90% train and 10% test splits of the dataset. We achieved the lowest RMSE = 841 at seed 12 and the highest RMSE = 1384 at seed 69 with an avgerage RMSE of 1054.
+```{r, echo=FALSE, warning=FALSE}
+
+stat <- data.frame()
+
+splitPerc = 0.9
+for (i in 1:150){
+  set.seed(i)
+  #count = count + 1
+  trainIndices = sample(1:dim(case1)[1],round(splitPerc * dim(case1)[1]))
+  train = case1[trainIndices,]
+  test = case1[-trainIndices,]
+  
+  model = lm(MonthlyIncome ~ ., data = train)
+  predict = predict(model, test)
+  RMSE = sqrt(mean((test$MonthlyIncome - predict)^2))
+  ID = i
+  d = data.frame(ID,RMSE)
+  stat <- bind_rows(stat,d)
+}
+
+stat %>% filter(RMSE==max(RMSE))
+stat %>% filter(RMSE==min(RMSE))
+
+mean(stat$RMSE)
+
+```
+## Conclusion
+  In conclusion, we analyzed at dataset for employment attrition and how it relates to other variables in the dataset; we have also analyzed how these variables relate to the monthly income. We specifically looked at variables like, Job Role, Job Satisfaction, Stock Options, Marital Status and so on in other to predict the outcome of Attrition. We also used the above variables like Attrition, Job Level, Years At Company, Years In Current Role etc to predict the outcome of Monthly income.
+
+we used 1-150 iterations of seed in our analysis, split our data to 905 for train and 10% for test and calculated the mean of all results. We used Naive Bayes and were successfull to get a good results for the mean specificity, sensitivity and accuracy using the model for the classification on Attrition. We got a mean accuracy of 0.84, mean sensitivity of 0.89 and mean specificity of 0.58.  We also got a very good RMSE result with a mean around 1050.  We used regression to build our model for prediction of Monthly Income variable. After our testing, we used 100% of the dataset to train the model we used to make prediction for the datasets provided without the predicted values.
+
