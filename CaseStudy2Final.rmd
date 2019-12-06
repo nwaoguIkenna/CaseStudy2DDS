@@ -63,6 +63,10 @@ CaseStudy2_data %>% ggplot(aes(fill=JobRole, x=JobSatisfaction)) + geom_histogra
 CaseStudy2_data %>% ggplot(aes(fill=OverTime, x=JobRole)) + geom_histogram(stat = 'count') + labs(title = 'Job Role with respect to Over Time Worked')
 
 CaseStudy2_data %>% ggplot(aes(fill=Attrition, x=JobRole)) + geom_histogram(stat = 'count') + labs(title = 'Job Role with respect to Turn Over')
+
+CaseStudy2_data %>% ggplot(aes(fill=Attrition, x=OverTime)) + geom_histogram(stat = 'count') + labs(title = 'Over Time worked with respect to Turn Over')
+
+CaseStudy2_data %>% ggplot(aes(fill=Attrition, x=StockOptionLevel)) + geom_histogram(stat = 'count') + labs(title = 'Stock Option Provided with respect to Turn Over')
 ```
 We can clearly see above that there are relationships between jobe role and many other variables.
 
@@ -250,3 +254,5 @@ mean(stat$RMSE)
 
 we used 1-150 iterations of seed in our analysis, split our data to 905 for train and 10% for test and calculated the mean of all results. We used Naive Bayes and were successfull to get a good results for the mean specificity, sensitivity and accuracy using the model for the classification on Attrition. We got a mean accuracy of 0.84, mean sensitivity of 0.89 and mean specificity of 0.58.  We also got a very good RMSE result with a mean around 1050.  We used regression to build our model for prediction of Monthly Income variable. After our testing, we used 100% of the dataset to train the model we used to make prediction for the datasets provided without the predicted values.
 
+### Youtube Presentation link
+https://youtu.be/CM2GDRPQfOA
